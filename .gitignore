@@ -3,3 +3,6 @@
 ################################################################################
 
 /ConsoleCSOM/bin/Debug/net5.0
+/ConsoleCSOM/obj
+/ConsoleCSOM/.vs/ConsoleCSOM
+/.vs
