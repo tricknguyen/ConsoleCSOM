@@ -15,7 +15,6 @@ namespace ConsoleCSOM
     {
         private static readonly HttpClient httpClient = new HttpClient();
         private const string tokenEndpoint = "https://login.microsoftonline.com/common/oauth2/token";
-
         private const string defaultAADAppId = "9bc3ab49-b65d-410a-85ad-de819febfddc";
 
         // Token cache handling
@@ -26,7 +25,6 @@ namespace ConsoleCSOM
 
         public ClientContextHelper()
         {
-
         }
 
         internal class TokenWaitInfo
@@ -128,7 +126,6 @@ namespace ConsoleCSOM
             var body = $"resource={resource}&client_id={clientId}&grant_type=password&username={HttpUtility.UrlEncode(username)}&password={HttpUtility.UrlEncode(password)}";
             using (var stringContent = new StringContent(body, Encoding.UTF8, "application/x-www-form-urlencoded"))
             {
-
                 var result = await httpClient.PostAsync(tokenEndpoint, stringContent).ContinueWith((response) =>
                 {
                     return response.Result.Content.ReadAsStringAsync().Result;
