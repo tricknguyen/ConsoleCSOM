@@ -146,7 +146,7 @@ namespace ConsoleCSOM
             taxonomyField.AnchorId = Guid.Empty;
             taxonomyField.Update();
 
-            ctx.ExecuteQuery();
+            await ctx.ExecuteQueryAsync();
         }
         private static void GetTaxonomyFieldInfo(ClientContext clientContext, out Guid termStoreId, out Guid termSetId)
         {
@@ -155,7 +155,7 @@ namespace ConsoleCSOM
 
             TaxonomySession session = TaxonomySession.GetTaxonomySession(clientContext);
             TermStore termStore = session.GetDefaultSiteCollectionTermStore();
-            TermSetCollection termSets = termStore.GetTermSetsByName("SPSNL14", 1033);
+            TermSetCollection termSets = termStore.GetTermSetsByName("city-anhvu", 1033);
 
             clientContext.Load(termSets, tsc => tsc.Include(ts => ts.Id));
             clientContext.Load(termStore, ts => ts.Id);
