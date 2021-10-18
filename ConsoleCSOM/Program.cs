@@ -5,6 +5,7 @@ using System;
 using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.SharePoint.Client.Taxonomy;
+using System.Collections.Generic;
 
 namespace ConsoleCSOM
 {
@@ -33,13 +34,7 @@ namespace ConsoleCSOM
                                  select list;
                      var lists = ctx.LoadQuery(query);*/
 
-                    
-
-                    
-
-                    
-                    await CreateSiteColumnTypeText(ctx);
-
+                    //await CreateSiteContentType(ctx);
 
                     //foreach (var item in lists)
                     //{
@@ -50,6 +45,10 @@ namespace ConsoleCSOM
 
                     //await SimpleCamlQueryAsync(ctx);
                     //await CsomTermSetAsync(ctx);
+
+                    await CreateListItem(ctx);
+
+
 
                 }
 
@@ -123,6 +122,7 @@ namespace ConsoleCSOM
             
             await ctx.ExecuteQueryAsync();
         }
+
         public static async Task CreateSiteColumnTypeTaxonomy(ClientContext ctx)
         {
             ctx.Load(ctx.Web, w => w.Title, c => c.Fields);
@@ -130,12 +130,13 @@ namespace ConsoleCSOM
             // Create as a regular field setting the desired type in XML
             Field field = web.Fields.AddFieldAsXml("<Field DisplayName='City Hunter' " +
                 "Name='City Hunter' " +
-                "ID='{850BA16F-2082-425C-B6E7-93E71A4197F0}' " +
+                "ID='{98FBA25E-625C-46EC-887F-587B4072CFD4}' " +
                 "Group='Custom Columns' Type='TaxonomyFieldTypeMulti' />", false, AddFieldOptions.AddFieldInternalNameHint);
-            await ctx.ExecuteQueryAsync();
+            ctx.ExecuteQuery();
 
             Guid termStoreId = Guid.Empty;
             Guid termSetId = Guid.Empty;
+            //Get id
             GetTaxonomyFieldInfo(ctx, out termStoreId, out termSetId);
 
             // Retrieve as Taxonomy Field
@@ -148,6 +149,7 @@ namespace ConsoleCSOM
 
             await ctx.ExecuteQueryAsync();
         }
+
         private static void GetTaxonomyFieldInfo(ClientContext clientContext, out Guid termStoreId, out Guid termSetId)
         {
             termStoreId = Guid.Empty;
@@ -164,6 +166,130 @@ namespace ConsoleCSOM
             termStoreId = termStore.Id;
             termSetId = termSets.FirstOrDefault().Id;
         }
+
+        public static async Task CreateSiteContentType (ClientContext ctx)
+        {
+            //CREATE CONTENT TYPE
+            // Get the content type collection for the website
+            ContentTypeCollection contentTypeColl = ctx.Web.ContentTypes;
+
+            // Specifies properties that are used as parameters to initialize a new content type.
+            ContentTypeCreationInformation newCt = new ContentTypeCreationInformation();
+            newCt.Name = "CSOM Test content type";
+            newCt.Description = "Training";
+            newCt.Group = "List Content Types";
+
+            // Add the new content type to the collection
+            ContentType ct = contentTypeColl.Add(newCt);
+            ctx.Load(ct);
+            await ctx.ExecuteQueryAsync();
+
+            // Display that the content type is created.
+            Console.WriteLine(ct.Name + " content type is created successfully");
+        }
+
+        public static async Task AddFieldToContentType (ClientContext ctx)
+        {
+            //Get all content type 
+            ContentTypeCollection ctp = ctx.Web.ContentTypes;
+
+            //Load
+            ctx.Load(ctp);
+            ctx.ExecuteQuery();
+            
+            //Select contenttype
+            ContentType targetContentType = (from contentType in ctp
+                                             where contentType.Name == "CSOM Test content type"
+                                             select contentType).FirstOrDefault();
+            ctx.Load(targetContentType);
+            ctx.ExecuteQuery();
+
+            Field targetField = ctx.Web.AvailableFields.GetByInternalNameOrTitle("City Hunter");
+            FieldLinkCreationInformation flc = new FieldLinkCreationInformation();
+            flc.Field = targetField;
+            flc.Field.Required = false;
+            flc.Field.Hidden = false;
+
+            targetContentType.FieldLinks.Add(flc);
+            targetContentType.Update(false);
+
+            await ctx.ExecuteQueryAsync();
+        }
+
+        public static async Task AddContenttypeToList (ClientContext ctx)
+        {
+            ContentTypeCollection ctp = ctx.Web.ContentTypes;
+
+            ctx.Load(ctp);
+            ctx.ExecuteQuery();
+
+            ContentType targetContenttype = (from contenttype in ctp
+                                             where contenttype.Name == "CSOM Test content type"
+                                             select contenttype).FirstOrDefault();
+
+            List targetList = ctx.Web.Lists.GetByTitle("CSOM Test");
+            targetList.ContentTypes.AddExistingContentType(targetContenttype);
+            targetList.Update();
+
+            ctx.Web.Update();
+
+            await ctx.ExecuteQueryAsync();
+        }
+
+        public static async Task SetDefaultContentType (ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+            ContentTypeCollection ctc = list.ContentTypes;
+
+            ctx.Load(ctc);
+            ctx.ExecuteQuery();
+
+            IList<ContentTypeId> listId = new List<ContentTypeId>();
+            foreach (ContentType ct in ctc)
+            {
+                if (ct.Name.Equals("CSOM Test content type"))
+                {
+                    listId.Add(ct.Id);
+                }
+            }
+
+            list.RootFolder.UniqueContentTypeOrder = listId;
+            list.RootFolder.Update();
+            list.Update();
+
+            await ctx.ExecuteQueryAsync();
+        }
+
+        public static async Task CreateListItem (ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+
+            ListItemCreationInformation itemCreateInfo = new ListItemCreationInformation();
+            ListItem newItem = list.AddItem(itemCreateInfo);
+
+            TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
+            TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
+            TermGroup termGroup = termStore.Groups.GetByName("NewTermGroup");
+            TermSet termSet = termGroup.TermSets.GetByName("city-anhvu");
+
+            Term term = termSet.Terms.GetByName("Ho Chi Minh");
+
+            ctx.Load(term);
+            ctx.ExecuteQuery();
+
+            
+            newItem["Title"] = "1";
+            newItem["Test 2"] = "Hello";
+            newItem["City Hunter"] = term;
+            newItem.Update();
+
+            ctx.ExecuteQuery();
+
+
+        }
+
+
+
 
         static ClientContext GetContext(ClientContextHelper clientContextHelper)
         {
