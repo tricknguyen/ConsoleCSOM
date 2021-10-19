@@ -25,31 +25,7 @@ namespace ConsoleCSOM
                 using (var clientContextHelper = new ClientContextHelper()) 
                 {
                     ClientContext ctx = GetContext(clientContextHelper);
-
-                    //ctx.Load(ctx.Web, w=>w.Title, c=>c.Fields);
-
-                    //list = object, title = property -> QUERY DATA
-                    /* var query = from list in ctx.Web.Lists.Include(l=>l.Title)
-                                 where list.Hidden == false && list.ItemCount > 0
-                                 select list;
-                     var lists = ctx.LoadQuery(query);*/
-
-                    //await CreateSiteContentType(ctx);
-
-                    //foreach (var item in lists)
-                    //{
-                    //    Console.WriteLine(item.Title);
-                    //}
-
-                    //Console.WriteLine($"Site {ctx.Web.Title}");
-
-                    //await SimpleCamlQueryAsync(ctx);
-                    //await CsomTermSetAsync(ctx);
-
-                    await CreateListItem(ctx);
-
-
-
+                    
                 }
 
                 Console.WriteLine($"Press Any Key To Stop!");
@@ -265,30 +241,88 @@ namespace ConsoleCSOM
             List list = ctx.Web.Lists.GetByTitle("CSOM Test");
 
             ListItemCreationInformation itemCreateInfo = new ListItemCreationInformation();
-            ListItem newItem = list.AddItem(itemCreateInfo);
 
             TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
             TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
             TermGroup termGroup = termStore.Groups.GetByName("NewTermGroup");
             TermSet termSet = termGroup.TermSets.GetByName("city-anhvu");
-
             Term term = termSet.Terms.GetByName("Ho Chi Minh");
 
             ctx.Load(term);
             ctx.ExecuteQuery();
 
-            
-            newItem["Title"] = "1";
-            newItem["Test 2"] = "Hello";
-            newItem["City Hunter"] = term;
+            ListItem newItem = list.AddItem(itemCreateInfo);
+            newItem["Title"] = "5";
+            newItem["Test_x0020_2"] = "about 2";
+            newItem["City_x0020_Hunter"] = new TaxonomyFieldValue() { TermGuid = term.Id.ToString(), Label = term.Name, WssId = -1 };
             newItem.Update();
 
-            ctx.ExecuteQuery();
+            await ctx.ExecuteQueryAsync();
+        }
 
+        public static async Task UpdateDefaultValueForFieldAbout (ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+            Field field = list.Fields.GetByInternalNameOrTitle("Test_x0020_2");
+            field.DefaultValue = "about default";
+            field.Update();
+            await ctx.ExecuteQueryAsync();
+        }
+        public static async Task UpdateDefaultValueForFieldCity (ClientContext ctx)
+        {
+            var taxColumn = ctx.CastTo<TaxonomyField>(ctx.Web.Fields.GetByInternalNameOrTitle("City_x0020_Hunter"));
+            ctx.Load(taxColumn);
+            ctx.ExecuteQuery();
+            //get taxonomy field
+            TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
+            TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
+            TermGroup termGroup = termStore.Groups.GetByName("NewTermGroup");
+            TermSet termSet = termGroup.TermSets.GetByName("city-anhvu");
+            Term term = termSet.Terms.GetByName("Ho Chi Minh");
+
+            ctx.Load(term, t => t.Name, t => t.Id);
+            ctx.ExecuteQuery();
+            //initialize taxonomy field value
+            var defaultValue = new TaxonomyFieldValue();
+            defaultValue.WssId = -1;
+            defaultValue.Label = term.Name;
+            defaultValue.TermGuid = term.Id.ToString();
+            //retrieve validated taxonomy field value
+            var validatedValue = taxColumn.GetValidatedString(defaultValue);
+            ctx.ExecuteQuery();
+            //set default value for a taxonomy field
+            taxColumn.DefaultValue = validatedValue.Value;
+            taxColumn.Update();
+            await ctx.ExecuteQueryAsync();
 
         }
 
+        private static async Task QueryListItem(ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
 
+            CamlQuery camlQuery = new CamlQuery();
+            camlQuery.ViewXml = @"<View>
+                                <Query>
+                                    <Where>
+                                        <Neq>
+                                            <FieldRef Name='Test'/>
+                                            <Value Type='Text'>about default</Value>
+                                        </Neq>
+                                    </Where>
+                                </Query>
+                                <RowLimit>100</RowLimit>
+                            </View>";
+            ListItemCollection cli = list.GetItems(camlQuery);
+
+            ctx.ExecuteQuery();
+
+            //foreach (ListItem item in cli)
+            //{
+            //    Console.WriteLine(item.Tes);
+            //}
+
+        }
 
 
         static ClientContext GetContext(ClientContextHelper clientContextHelper)
