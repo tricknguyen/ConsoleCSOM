@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using Microsoft.SharePoint.Client.Taxonomy;
 using System.Collections.Generic;
+using Microsoft.SharePoint.Client.UserProfiles;
 
 namespace ConsoleCSOM
 {
@@ -26,6 +27,13 @@ namespace ConsoleCSOM
                 {
                     ClientContext ctx = GetContext(clientContextHelper);
                     
+                    
+
+
+
+
+
+
                 }
 
                 Console.WriteLine($"Press Any Key To Stop!");
@@ -300,29 +308,130 @@ namespace ConsoleCSOM
         private static async Task QueryListItem(ClientContext ctx)
         {
             List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+            ctx.Load(list.ContentTypes);
+            await ctx.ExecuteQueryAsync();
 
             CamlQuery camlQuery = new CamlQuery();
             camlQuery.ViewXml = @"<View>
                                 <Query>
                                     <Where>
                                         <Neq>
-                                            <FieldRef Name='Test'/>
+                                            <FieldRef Name='Test_x0020_2'/>
                                             <Value Type='Text'>about default</Value>
                                         </Neq>
                                     </Where>
                                 </Query>
                                 <RowLimit>100</RowLimit>
                             </View>";
+
             ListItemCollection cli = list.GetItems(camlQuery);
 
+            ctx.Load(cli);
             ctx.ExecuteQuery();
 
-            //foreach (ListItem item in cli)
-            //{
-            //    Console.WriteLine(item.Tes);
-            //}
-
+            var item = cli.FirstOrDefault();
+            Console.WriteLine(item.DisplayName);
+           
+            
         }
+
+        private static async Task CreateListView(ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+
+            ViewCollection viewCollection = list.Views;
+            ctx.Load(viewCollection);
+            ctx.ExecuteQuery();
+
+            ViewCreationInformation viewCreationInformation = new ViewCreationInformation();
+
+            viewCreationInformation.Title = "New List View by VN";
+            viewCreationInformation.ViewTypeKind = ViewType.None;
+            viewCreationInformation.RowLimit = 10;
+
+            viewCreationInformation.Query = @"
+                                <Where>
+                                        <Eq>
+                                            <FieldRef Name='City_x0020_Hunter'/>
+                                            <Value Type='TaxonomyFieldTypeMulti'>Ho Chi Minh</Value>
+                                        </Eq>
+                                </Where>
+                                 <OrderBy><FieldRef Name='ID' Ascending='False'/></OrderBy>
+                            ";
+
+            string CommaSeparateColumnNames = "ID,Test_x0020_2,City_x0020_Hunter";
+            viewCreationInformation.ViewFields = CommaSeparateColumnNames.Split(',');
+
+            viewCollection.Add(viewCreationInformation);
+
+            await ctx.ExecuteQueryAsync();
+        }
+
+        private static async Task UpdateListItem(ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+
+            CamlQuery camlQuery = new CamlQuery();
+            camlQuery.ViewXml = @"<View>
+                                <Query>
+                                    <Where>
+                                        <Neq>
+                                            <FieldRef Name='Test_x0020_2'/>
+                                            <Value Type='Text'>about default</Value>
+                                        </Neq>
+                                    </Where>
+                                </Query>
+                                <RowLimit>100</RowLimit>
+                            </View>";
+
+            ListItemCollection listItems = list.GetItems(camlQuery);
+            ctx.Load(listItems);
+            ctx.ExecuteQuery();
+
+            foreach (var item in listItems)
+            {
+                item["Test_x0020_2"] = "Update script";
+                item.Update();
+            }
+            await ctx.ExecuteQueryAsync();
+        }
+
+        private static async Task CreateFieldAuthor(ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+            Field field = list.Fields.AddFieldAsXml(@"
+                        <Field DisplayName='author'
+                            Name='author'
+                        ID = '{B735F7D3-D585-40C9-8116-28B34B5762BB}'                         
+                        Type='User' />
+
+                    ", true, AddFieldOptions.AddFieldInternalNameHint);
+            ctx.Load(field);
+            await ctx.ExecuteQueryAsync();
+        }
+
+        private static async Task SetAdminToAuthor (ClientContext ctx)
+        {
+            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
+
+            CamlQuery camlQuery = CamlQuery.CreateAllItemsQuery();
+
+            ListItemCollection listItems = list.GetItems(camlQuery);
+
+
+            ctx.Load(listItems);
+            ctx.ExecuteQuery();
+
+
+            foreach (var item in listItems)
+            {
+                item["author0"] = ctx.Web.CurrentUser;
+                item.Update();
+            }
+            await ctx.ExecuteQueryAsync();
+        }
+        
+
 
 
         static ClientContext GetContext(ClientContextHelper clientContextHelper)
