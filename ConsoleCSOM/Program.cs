@@ -7,18 +7,13 @@ using System.Linq;
 using Microsoft.SharePoint.Client.Taxonomy;
 using System.Collections.Generic;
 using Microsoft.SharePoint.Client.UserProfiles;
+using ConsoleCSOM.Exercise1.SharepointServices;
 
 namespace ConsoleCSOM
 {
-    class SharepointInfo
-    {
-        public string SiteUrl { get; set; }
-        public string Username { get; set; }
-        public string Password { get; set; }
-    }
-
     class Program
     {
+        private static ISharepointService _services;
         static async Task Main(string[] args)
         {
             try
@@ -26,8 +21,40 @@ namespace ConsoleCSOM
                 using (var clientContextHelper = new ClientContextHelper()) 
                 {
                     ClientContext ctx = GetContext(clientContextHelper);
+
+                    //Get all content type 
+                    ContentTypeCollection ctp = ctx.Web.ContentTypes;
+
+                    //Load
+                    ctx.Load(ctp);
+                    ctx.ExecuteQuery();
+
+                    //Select contenttype
+                    ContentType targetContentType = (from contentType in ctp
+                                                     where contentType.Name == "CSOM Test content type"
+                                                     select contentType).FirstOrDefault();
+                    ctx.Load(targetContentType);
+                    ctx.ExecuteQuery();
+
+                    Field targetField = ctx.Web.AvailableFields.GetByInternalNameOrTitle("cities");
+                    FieldLinkCreationInformation flc = new FieldLinkCreationInformation();
+                    flc.Field = targetField;
+                    flc.Field.Required = false;
+                    flc.Field.Hidden = false;
+
+                    targetContentType.FieldLinks.Add(flc);
+                    targetContentType.Update(false);
+
+                    List targetList = ctx.Web.Lists.GetByTitle("CSOM Test");
+                    //targetList.ContentTypes.AddExistingContentType(targetContentType);
                     
                     
+                   
+                    targetList.Update();
+
+                    await ctx.ExecuteQueryAsync();
+
+
 
 
 
@@ -42,86 +69,23 @@ namespace ConsoleCSOM
             catch (Exception ex)
             {
             }
-        }
-        private static async Task CreationList(ClientContext ctx)
-        {
-            ListCreationInformation creationInfo = new ListCreationInformation();
-            creationInfo.Title = "CSOM Test";
-            creationInfo.Description = "New List created by VN";
-            creationInfo.TemplateType = (int)ListTemplateType.GenericList;
-
-            List newList = ctx.Web.Lists.Add(creationInfo);
-
-            ctx.Load(newList);
-            await ctx.ExecuteQueryAsync();
-
-        }
-
-        public static async Task CreateTermSet(ClientContext ctx)
-        {
-            string termGroupName = "NewTermGroup";
-            TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
-
-            ctx.Load(taxonomySession, 
-                ts => ts.TermStores.Include(
-                    store => store.Name,
-                    store => store.Groups.Include(group => group.Name)
-                    )
-                );
-
-            TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
-            if (termStore!=null)
-            {
-                TermGroup myGroup = termStore.CreateGroup(termGroupName, Guid.NewGuid());
-                //1033 - lcid -locale indetifier for the language
-                TermSet myTermSet = myGroup.CreateTermSet("city-anhvu", Guid.NewGuid(), 1033);
-
-                await ctx.ExecuteQueryAsync();
-            }
-            
-        }
-
-        public static async Task CreateTerm(ClientContext ctx)
-        {
-            TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
-            TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
-            TermGroup termGroup = termStore.Groups.GetByName("NewTermGroup");
-            TermSet termSet = termGroup.TermSets.GetByName("city-anhvu");
-
-            termSet.CreateTerm("Ho Chi Minh", 1033, Guid.NewGuid());
-            termSet.CreateTerm("Stockholm", 1033, Guid.NewGuid());
-
-            await ctx.ExecuteQueryAsync();
-        }
-
-        public static async Task CreateSiteColumnTypeText(ClientContext ctx)
-        {
-            ctx.Load(ctx.Web, w => w.Title, c => c.Fields);
-            var web = ctx.Web;
-            web.Fields.AddFieldAsXml("<Field DisplayName='Test 2' " +
-                "Name='Test 2' " +
-                "ID='{15BB3A47-ABD4-4ED9-9636-51791B0DB550}' " +
-                "Group='Custom Columns' " +
-                "Type='Text' />", false, AddFieldOptions.AddFieldInternalNameHint);
-            
-            await ctx.ExecuteQueryAsync();
-        }
-
-        public static async Task CreateSiteColumnTypeTaxonomy(ClientContext ctx)
+        }        
+        //exercise 3
+        private static async Task CreateTaxonomyField (ClientContext ctx)
         {
             ctx.Load(ctx.Web, w => w.Title, c => c.Fields);
             var web = ctx.Web;
             // Create as a regular field setting the desired type in XML
-            Field field = web.Fields.AddFieldAsXml("<Field DisplayName='City Hunter' " +
-                "Name='City Hunter' " +
-                "ID='{98FBA25E-625C-46EC-887F-587B4072CFD4}' " +
+            Field field = web.Fields.AddFieldAsXml("<Field DisplayName='cities' " +
+                "Name='cities' " +
+                "ID='{159B9BB9-982C-4A8B-96C8-8D7031F1DE80}' " +
                 "Group='Custom Columns' Type='TaxonomyFieldTypeMulti' />", false, AddFieldOptions.AddFieldInternalNameHint);
             ctx.ExecuteQuery();
 
             Guid termStoreId = Guid.Empty;
             Guid termSetId = Guid.Empty;
             //Get id
-            GetTaxonomyFieldInfo(ctx, out termStoreId, out termSetId);
+            FieldInfor.GetTaxonomyFieldInfo(ctx, out termStoreId, out termSetId);
 
             // Retrieve as Taxonomy Field
             TaxonomyField taxonomyField = ctx.CastTo<TaxonomyField>(field);
@@ -129,307 +93,15 @@ namespace ConsoleCSOM
             taxonomyField.TermSetId = termSetId;
             taxonomyField.TargetTemplate = String.Empty;
             taxonomyField.AnchorId = Guid.Empty;
+
+            taxonomyField.AllowMultipleValues = true;
+
             taxonomyField.Update();
 
             await ctx.ExecuteQueryAsync();
         }
 
-        private static void GetTaxonomyFieldInfo(ClientContext clientContext, out Guid termStoreId, out Guid termSetId)
-        {
-            termStoreId = Guid.Empty;
-            termSetId = Guid.Empty;
 
-            TaxonomySession session = TaxonomySession.GetTaxonomySession(clientContext);
-            TermStore termStore = session.GetDefaultSiteCollectionTermStore();
-            TermSetCollection termSets = termStore.GetTermSetsByName("city-anhvu", 1033);
-
-            clientContext.Load(termSets, tsc => tsc.Include(ts => ts.Id));
-            clientContext.Load(termStore, ts => ts.Id);
-            clientContext.ExecuteQuery();
-
-            termStoreId = termStore.Id;
-            termSetId = termSets.FirstOrDefault().Id;
-        }
-
-        public static async Task CreateSiteContentType (ClientContext ctx)
-        {
-            //CREATE CONTENT TYPE
-            // Get the content type collection for the website
-            ContentTypeCollection contentTypeColl = ctx.Web.ContentTypes;
-
-            // Specifies properties that are used as parameters to initialize a new content type.
-            ContentTypeCreationInformation newCt = new ContentTypeCreationInformation();
-            newCt.Name = "CSOM Test content type";
-            newCt.Description = "Training";
-            newCt.Group = "List Content Types";
-
-            // Add the new content type to the collection
-            ContentType ct = contentTypeColl.Add(newCt);
-            ctx.Load(ct);
-            await ctx.ExecuteQueryAsync();
-
-            // Display that the content type is created.
-            Console.WriteLine(ct.Name + " content type is created successfully");
-        }
-
-        public static async Task AddFieldToContentType (ClientContext ctx)
-        {
-            //Get all content type 
-            ContentTypeCollection ctp = ctx.Web.ContentTypes;
-
-            //Load
-            ctx.Load(ctp);
-            ctx.ExecuteQuery();
-            
-            //Select contenttype
-            ContentType targetContentType = (from contentType in ctp
-                                             where contentType.Name == "CSOM Test content type"
-                                             select contentType).FirstOrDefault();
-            ctx.Load(targetContentType);
-            ctx.ExecuteQuery();
-
-            Field targetField = ctx.Web.AvailableFields.GetByInternalNameOrTitle("City Hunter");
-            FieldLinkCreationInformation flc = new FieldLinkCreationInformation();
-            flc.Field = targetField;
-            flc.Field.Required = false;
-            flc.Field.Hidden = false;
-
-            targetContentType.FieldLinks.Add(flc);
-            targetContentType.Update(false);
-
-            await ctx.ExecuteQueryAsync();
-        }
-
-        public static async Task AddContenttypeToList (ClientContext ctx)
-        {
-            ContentTypeCollection ctp = ctx.Web.ContentTypes;
-
-            ctx.Load(ctp);
-            ctx.ExecuteQuery();
-
-            ContentType targetContenttype = (from contenttype in ctp
-                                             where contenttype.Name == "CSOM Test content type"
-                                             select contenttype).FirstOrDefault();
-
-            List targetList = ctx.Web.Lists.GetByTitle("CSOM Test");
-            targetList.ContentTypes.AddExistingContentType(targetContenttype);
-            targetList.Update();
-
-            ctx.Web.Update();
-
-            await ctx.ExecuteQueryAsync();
-        }
-
-        public static async Task SetDefaultContentType (ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-            ContentTypeCollection ctc = list.ContentTypes;
-
-            ctx.Load(ctc);
-            ctx.ExecuteQuery();
-
-            IList<ContentTypeId> listId = new List<ContentTypeId>();
-            foreach (ContentType ct in ctc)
-            {
-                if (ct.Name.Equals("CSOM Test content type"))
-                {
-                    listId.Add(ct.Id);
-                }
-            }
-
-            list.RootFolder.UniqueContentTypeOrder = listId;
-            list.RootFolder.Update();
-            list.Update();
-
-            await ctx.ExecuteQueryAsync();
-        }
-
-        public static async Task CreateListItem (ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-
-            ListItemCreationInformation itemCreateInfo = new ListItemCreationInformation();
-
-            TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
-            TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
-            TermGroup termGroup = termStore.Groups.GetByName("NewTermGroup");
-            TermSet termSet = termGroup.TermSets.GetByName("city-anhvu");
-            Term term = termSet.Terms.GetByName("Ho Chi Minh");
-
-            ctx.Load(term);
-            ctx.ExecuteQuery();
-
-            ListItem newItem = list.AddItem(itemCreateInfo);
-            newItem["Title"] = "5";
-            newItem["Test_x0020_2"] = "about 2";
-            newItem["City_x0020_Hunter"] = new TaxonomyFieldValue() { TermGuid = term.Id.ToString(), Label = term.Name, WssId = -1 };
-            newItem.Update();
-
-            await ctx.ExecuteQueryAsync();
-        }
-
-        public static async Task UpdateDefaultValueForFieldAbout (ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-            Field field = list.Fields.GetByInternalNameOrTitle("Test_x0020_2");
-            field.DefaultValue = "about default";
-            field.Update();
-            await ctx.ExecuteQueryAsync();
-        }
-        public static async Task UpdateDefaultValueForFieldCity (ClientContext ctx)
-        {
-            var taxColumn = ctx.CastTo<TaxonomyField>(ctx.Web.Fields.GetByInternalNameOrTitle("City_x0020_Hunter"));
-            ctx.Load(taxColumn);
-            ctx.ExecuteQuery();
-            //get taxonomy field
-            TaxonomySession taxonomySession = TaxonomySession.GetTaxonomySession(ctx);
-            TermStore termStore = taxonomySession.GetDefaultSiteCollectionTermStore();
-            TermGroup termGroup = termStore.Groups.GetByName("NewTermGroup");
-            TermSet termSet = termGroup.TermSets.GetByName("city-anhvu");
-            Term term = termSet.Terms.GetByName("Ho Chi Minh");
-
-            ctx.Load(term, t => t.Name, t => t.Id);
-            ctx.ExecuteQuery();
-            //initialize taxonomy field value
-            var defaultValue = new TaxonomyFieldValue();
-            defaultValue.WssId = -1;
-            defaultValue.Label = term.Name;
-            defaultValue.TermGuid = term.Id.ToString();
-            //retrieve validated taxonomy field value
-            var validatedValue = taxColumn.GetValidatedString(defaultValue);
-            ctx.ExecuteQuery();
-            //set default value for a taxonomy field
-            taxColumn.DefaultValue = validatedValue.Value;
-            taxColumn.Update();
-            await ctx.ExecuteQueryAsync();
-
-        }
-
-        private static async Task QueryListItem(ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-            ctx.Load(list.ContentTypes);
-            await ctx.ExecuteQueryAsync();
-
-            CamlQuery camlQuery = new CamlQuery();
-            camlQuery.ViewXml = @"<View>
-                                <Query>
-                                    <Where>
-                                        <Neq>
-                                            <FieldRef Name='Test_x0020_2'/>
-                                            <Value Type='Text'>about default</Value>
-                                        </Neq>
-                                    </Where>
-                                </Query>
-                                <RowLimit>100</RowLimit>
-                            </View>";
-
-            ListItemCollection cli = list.GetItems(camlQuery);
-
-            ctx.Load(cli);
-            ctx.ExecuteQuery();
-
-            var item = cli.FirstOrDefault();
-            Console.WriteLine(item.DisplayName);
-           
-            
-        }
-
-        private static async Task CreateListView(ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-
-            ViewCollection viewCollection = list.Views;
-            ctx.Load(viewCollection);
-            ctx.ExecuteQuery();
-
-            ViewCreationInformation viewCreationInformation = new ViewCreationInformation();
-
-            viewCreationInformation.Title = "New List View by VN";
-            viewCreationInformation.ViewTypeKind = ViewType.None;
-            viewCreationInformation.RowLimit = 10;
-
-            viewCreationInformation.Query = @"
-                                <Where>
-                                        <Eq>
-                                            <FieldRef Name='City_x0020_Hunter'/>
-                                            <Value Type='TaxonomyFieldTypeMulti'>Ho Chi Minh</Value>
-                                        </Eq>
-                                </Where>
-                                 <OrderBy><FieldRef Name='ID' Ascending='False'/></OrderBy>
-                            ";
-
-            string CommaSeparateColumnNames = "ID,Test_x0020_2,City_x0020_Hunter";
-            viewCreationInformation.ViewFields = CommaSeparateColumnNames.Split(',');
-
-            viewCollection.Add(viewCreationInformation);
-
-            await ctx.ExecuteQueryAsync();
-        }
-
-        private static async Task UpdateListItem(ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-
-            CamlQuery camlQuery = new CamlQuery();
-            camlQuery.ViewXml = @"<View>
-                                <Query>
-                                    <Where>
-                                        <Neq>
-                                            <FieldRef Name='Test_x0020_2'/>
-                                            <Value Type='Text'>about default</Value>
-                                        </Neq>
-                                    </Where>
-                                </Query>
-                                <RowLimit>100</RowLimit>
-                            </View>";
-
-            ListItemCollection listItems = list.GetItems(camlQuery);
-            ctx.Load(listItems);
-            ctx.ExecuteQuery();
-
-            foreach (var item in listItems)
-            {
-                item["Test_x0020_2"] = "Update script";
-                item.Update();
-            }
-            await ctx.ExecuteQueryAsync();
-        }
-
-        private static async Task CreateFieldAuthor(ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-            Field field = list.Fields.AddFieldAsXml(@"
-                        <Field DisplayName='author'
-                            Name='author'
-                        ID = '{B735F7D3-D585-40C9-8116-28B34B5762BB}'                         
-                        Type='User' />
-
-                    ", true, AddFieldOptions.AddFieldInternalNameHint);
-            ctx.Load(field);
-            await ctx.ExecuteQueryAsync();
-        }
-
-        private static async Task SetAdminToAuthor (ClientContext ctx)
-        {
-            List list = ctx.Web.Lists.GetByTitle("CSOM Test");
-
-            CamlQuery camlQuery = CamlQuery.CreateAllItemsQuery();
-
-            ListItemCollection listItems = list.GetItems(camlQuery);
-
-
-            ctx.Load(listItems);
-            ctx.ExecuteQuery();
-
-
-            foreach (var item in listItems)
-            {
-                item["author0"] = ctx.Web.CurrentUser;
-                item.Update();
-            }
-            await ctx.ExecuteQueryAsync();
-        }
         
 
 
