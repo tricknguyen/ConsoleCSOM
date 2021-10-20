@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleCSOM.Exercise2
 {
-    public class CamlqueryHelper
+    public static class CamlqueryHelper
     {
         public static async Task QueryListItem(ClientContext ctx)
         {

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace ConsoleCSOM.Exercise1
 {
-    public class ContenttypeHelper
+    public static class ContenttypeHelper
     {
         public static async Task CreateSiteColumnTypeText(ClientContext ctx)
         {

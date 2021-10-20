@@ -20,6 +20,7 @@ namespace ConsoleCSOM
             </Query>
             <RowLimit>100</RowLimit>
         </View>";
+
         public static string QueryListView = @"
         <Where>
             <Eq>
@@ -28,6 +29,7 @@ namespace ConsoleCSOM
             </Eq>
         </Where>
         <OrderBy><FieldRef Name='ID' Ascending='False'/></OrderBy>";
+
         public static string QueryUpdateListItem = @"
         <View>
             <Query>
@@ -40,7 +42,20 @@ namespace ConsoleCSOM
             </Query>
             <RowLimit>100</RowLimit>
         </View>";
-        
+
+        public static string QueryItemInFolder = @"
+        <View>
+            <Query>
+                <Where>
+                    <Eq>
+                        <FieldRef Name='cities'/>
+                        <Value Type='TaxonomyFieldTypeMulti'>Stockholm</Value>
+                    </Eq>
+                </Where>
+            </Query>
+            <RowLimit>100</RowLimit>
+        </View>
+        ";
 
     }
 }
